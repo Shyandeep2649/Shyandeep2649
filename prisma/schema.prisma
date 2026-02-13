@@ -26,46 +26,302 @@ enum EntryType {
   EXPENSE
 }
 
+enum AlertType {
+  SALARY_DUE
+  LOW_CASH
+  HIGH_ABSENTEE
+  EXPENSE_SPIKE
+  ATTENDANCE_PATTERN
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+}
+
+model Business {
+  id             String          @id @default(cuid())
+  name           String
+  slug           String          @unique
+  timezone       String          @default("UTC")
+  currencyCode   String          @default("INR")
+  isActive       Boolean         @default(true)
+  users          UserBusiness[]
+  staff          Staff[]
+  attendances    Attendance[]
+  transactions   Transaction[]
+  alertRules     AlertRule[]
+  alertEvents    AlertEvent[]
+  notifications  Notification[]
+  cashSnapshots  CashSnapshot[]
+  payrollCycles  PayrollCycle[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([slug])
+}
+
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(MANAGER)
-  createdAt    DateTime @default(now())
+  id                String                @id @default(cuid())
+  email             String                @unique
+  passwordHash      String
+  role              UserRole              @default(MANAGER)
+  businesses        UserBusiness[]
+  createdRules      AlertRule[]           @relation("AlertRuleCreatedBy")
+  assignedEvents    AlertEvent[]          @relation("AlertEventAssignedTo")
+  acknowledgedItems AlertAcknowledgement[]
+  notifications     NotificationRecipient[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+}
+
+model UserBusiness {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       UserRole @default(MANAGER)
+  isDefault  Boolean  @default(false)
+  user       User     @relation(fields: [userId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, businessId])
+  @@index([businessId])
 }
 
 model Staff {
-  id               String       @id @default(cuid())
+  id               String           @id @default(cuid())
+  businessId       String
   name             String
   role             String
-  monthlySalary    Decimal      @db.Decimal(10, 2)
-  performanceScore Float        @default(100)
+  monthlySalary    Decimal          @db.Decimal(10, 2)
+  performanceScore Float            @default(100)
+  isActive         Boolean          @default(true)
+  business         Business         @relation(fields: [businessId], references: [id])
   attendances      Attendance[]
   transactions     Transaction[]
-  createdAt        DateTime     @default(now())
+  payrollItems     PayrollCycleItem[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([businessId])
 }
 
 model Attendance {
-  id        String           @id @default(cuid())
-  staffId   String
-  date      DateTime
-  status    AttendanceStatus
-  overtime  Int              @default(0)
-  staff     Staff            @relation(fields: [staffId], references: [id])
-  createdAt DateTime         @default(now())
+  id          String           @id @default(cuid())
+  businessId  String
+  staffId     String
+  date        DateTime
+  status      AttendanceStatus
+  overtime    Int              @default(0)
+  workedHours Decimal?         @db.Decimal(5, 2)
+  note        String?
+  business    Business         @relation(fields: [businessId], references: [id])
+  staff       Staff            @relation(fields: [staffId], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@unique([staffId, date])
+  @@index([businessId, date])
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
-  date        DateTime
-  type        EntryType
-  category    String
-  amount      Decimal  @db.Decimal(10, 2)
-  paymentMode String
-  notes       String?
-  staffId     String?
-  staff       Staff?   @relation(fields: [staffId], references: [id])
-  createdAt   DateTime @default(now())
+  id            String          @id @default(cuid())
+  businessId    String
+  date          DateTime
+  type          EntryType
+  category      String
+  amount        Decimal         @db.Decimal(10, 2)
+  paymentMode   String
+  notes         String?
+  staffId       String?
+  isAnomaly     Boolean         @default(false)
+  anomalyScore  Decimal?        @db.Decimal(5, 2)
+  business      Business        @relation(fields: [businessId], references: [id])
+  staff         Staff?          @relation(fields: [staffId], references: [id])
+  alertEvents   AlertEvent[]    @relation("AlertEventTransaction")
+  cashSnapshots CashSnapshot[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([businessId, date])
+  @@index([businessId, type, date])
+}
+
+model CashSnapshot {
+  id                    String      @id @default(cuid())
+  businessId            String
+  asOfDate              DateTime
+  openingBalance        Decimal     @db.Decimal(12, 2)
+  closingBalance        Decimal     @db.Decimal(12, 2)
+  incomeTotal           Decimal     @db.Decimal(12, 2)
+  expenseTotal          Decimal     @db.Decimal(12, 2)
+  netFlow               Decimal     @db.Decimal(12, 2)
+  primaryTransactionId  String?
+  business              Business    @relation(fields: [businessId], references: [id])
+  primaryTransaction    Transaction? @relation(fields: [primaryTransactionId], references: [id])
+  createdAt             DateTime    @default(now())
+
+  @@unique([businessId, asOfDate])
+  @@index([businessId, asOfDate])
+}
+
+model PayrollCycle {
+  id                String            @id @default(cuid())
+  businessId        String
+  label             String
+  periodStart       DateTime
+  periodEnd         DateTime
+  dueDate           DateTime
+  totalPayroll      Decimal           @db.Decimal(12, 2)
+  paidPayroll       Decimal           @db.Decimal(12, 2) @default(0)
+  isClosed          Boolean           @default(false)
+  business          Business          @relation(fields: [businessId], references: [id])
+  items             PayrollCycleItem[]
+  generatedAlerts   AlertEvent[]      @relation("AlertEventPayrollCycle")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([businessId, dueDate])
+}
+
+model PayrollCycleItem {
+  id              String       @id @default(cuid())
+  payrollCycleId  String
+  staffId         String
+  baseSalary      Decimal      @db.Decimal(10, 2)
+  overtimePay     Decimal      @db.Decimal(10, 2) @default(0)
+  deductions      Decimal      @db.Decimal(10, 2) @default(0)
+  netSalary       Decimal      @db.Decimal(10, 2)
+  isPaid          Boolean      @default(false)
+  paidAt          DateTime?
+  payrollCycle    PayrollCycle @relation(fields: [payrollCycleId], references: [id])
+  staff           Staff        @relation(fields: [staffId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  @@unique([payrollCycleId, staffId])
+  @@index([staffId])
+}
+
+model AlertRule {
+  id                          String              @id @default(cuid())
+  businessId                  String
+  type                        AlertType
+  name                        String
+  description                 String?
+  isEnabled                   Boolean             @default(true)
+  severity                    AlertSeverity       @default(WARNING)
+  cooldownMinutes             Int                 @default(60)
+  absenteeThresholdPercent    Decimal?            @db.Decimal(5, 2)
+  lowCashThresholdAmount      Decimal?            @db.Decimal(12, 2)
+  expenseSpikePercent         Decimal?            @db.Decimal(5, 2)
+  attendanceDropPercent       Decimal?            @db.Decimal(5, 2)
+  salaryDueLeadDays           Int?
+  customConfig                Json?
+  business                    Business            @relation(fields: [businessId], references: [id])
+  createdByUserId             String?
+  createdBy                   User?               @relation("AlertRuleCreatedBy", fields: [createdByUserId], references: [id])
+  events                      AlertEvent[]
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+
+  @@unique([businessId, type, name])
+  @@index([businessId, type, isEnabled])
+}
+
+model AlertEvent {
+  id                    String                 @id @default(cuid())
+  businessId            String
+  ruleId                String?
+  type                  AlertType
+  title                 String
+  message               String
+  severity              AlertSeverity
+  status                AlertStatus            @default(OPEN)
+  triggeredAt           DateTime               @default(now())
+  resolvedAt            DateTime?
+  dedupeKey             String?
+  metricValue           Decimal?               @db.Decimal(12, 2)
+  baselineValue         Decimal?               @db.Decimal(12, 2)
+  thresholdValue        Decimal?               @db.Decimal(12, 2)
+  context               Json?
+  business              Business               @relation(fields: [businessId], references: [id])
+  rule                  AlertRule?             @relation(fields: [ruleId], references: [id])
+  payrollCycleId        String?
+  payrollCycle          PayrollCycle?          @relation("AlertEventPayrollCycle", fields: [payrollCycleId], references: [id])
+  transactionId         String?
+  transaction           Transaction?           @relation("AlertEventTransaction", fields: [transactionId], references: [id])
+  assignedToUserId      String?
+  assignedTo            User?                  @relation("AlertEventAssignedTo", fields: [assignedToUserId], references: [id])
+  notifications         Notification[]
+  acknowledgements      AlertAcknowledgement[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([businessId, type, status, triggeredAt])
+  @@index([ruleId])
+  @@unique([businessId, dedupeKey])
+}
+
+model AlertAcknowledgement {
+  id          String     @id @default(cuid())
+  eventId      String
+  userId       String
+  note         String?
+  event        AlertEvent @relation(fields: [eventId], references: [id])
+  user         User       @relation(fields: [userId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id               String                   @id @default(cuid())
+  businessId       String
+  alertEventId     String?
+  title            String
+  body             String
+  channel          NotificationChannel      @default(IN_APP)
+  priority         AlertSeverity            @default(INFO)
+  scheduledFor     DateTime?
+  sentAt           DateTime?
+  isBroadcast      Boolean                  @default(false)
+  business         Business                 @relation(fields: [businessId], references: [id])
+  alertEvent       AlertEvent?              @relation(fields: [alertEventId], references: [id])
+  recipients       NotificationRecipient[]
+  createdAt        DateTime                 @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([channel, scheduledFor])
+}
+
+model NotificationRecipient {
+  id               String       @id @default(cuid())
+  notificationId   String
+  userId           String
+  isRead           Boolean      @default(false)
+  readAt           DateTime?
+  deliveredAt      DateTime?
+  notification     Notification @relation(fields: [notificationId], references: [id])
+  user             User         @relation(fields: [userId], references: [id])
+  createdAt        DateTime     @default(now())
+
+  @@unique([notificationId, userId])
+  @@index([userId, isRead])
 }
