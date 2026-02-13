@@ -16,16 +16,13 @@ npm run db:generate
 npm run dev
 ```
 
-## Features Implemented
-- Dark futuristic dashboard with glowing glassmorphism cards
-- Sidebar navigation: Dashboard, Attendance, Cashbook, Reports, Staff, Settings
-- Attendance and cashbook module scaffolds
-- Smart alerts panel and analytics charts
-- JWT login API scaffold and core API endpoints
-- Prisma schema for users, staff, attendance, and transactions
+## What changed for new users
+- Removed all hardcoded/mock dashboard values
+- Dashboard now resolves from live database aggregates
+- Fresh install shows clean empty states until real attendance/cash records are added
 
 ## Next Build Steps
-- Connect forms to API and persistence
+- Connect attendance and cashbook forms to write APIs
 - Add role-based guards in middleware
 - Implement export to PDF/Excel
 - Add PWA manifest/service worker and offline caching
