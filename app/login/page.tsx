@@ -1,0 +1,3 @@
+export default function LoginPage() {
+  return <main className="flex min-h-screen items-center justify-center p-6"><form className="glass w-full max-w-md space-y-4 rounded-2xl p-6"><h1 className="text-2xl font-semibold">WorkTrack X Login</h1><input className="w-full rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2" placeholder="Email" type="email" /><input className="w-full rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2" placeholder="Password" type="password" /><button className="w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2 font-medium">Secure Sign In</button></form></main>;
+}

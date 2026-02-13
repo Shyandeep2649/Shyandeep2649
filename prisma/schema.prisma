@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  OVERTIME
+  LEAVE_PAID
+  LEAVE_UNPAID
+}
+
+enum EntryType {
+  INCOME
+  EXPENSE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(MANAGER)
+  createdAt    DateTime @default(now())
+}
+
+model Staff {
+  id               String       @id @default(cuid())
+  name             String
+  role             String
+  monthlySalary    Decimal      @db.Decimal(10, 2)
+  performanceScore Float        @default(100)
+  attendances      Attendance[]
+  transactions     Transaction[]
+  createdAt        DateTime     @default(now())
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  staffId   String
+  date      DateTime
+  status    AttendanceStatus
+  overtime  Int              @default(0)
+  staff     Staff            @relation(fields: [staffId], references: [id])
+  createdAt DateTime         @default(now())
+
+  @@unique([staffId, date])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  date        DateTime
+  type        EntryType
+  category    String
+  amount      Decimal  @db.Decimal(10, 2)
+  paymentMode String
+  notes       String?
+  staffId     String?
+  staff       Staff?   @relation(fields: [staffId], references: [id])
+  createdAt   DateTime @default(now())
+}
